@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>To-Do List Board</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
         :root {
             --bg-color-light: #ffeede;
@@ -83,6 +84,7 @@
             display: flex;
             flex-direction: column;
             position: relative;
+            user-select: none;
         }
 
         .column h2 {
@@ -110,6 +112,7 @@
             justify-content: space-between;
             align-items: center;
             gap: 1rem;
+            cursor: move;
         }
 
         .task.completed span:first-child {
@@ -130,17 +133,57 @@
             cursor: pointer;
         }
 
-        .priority-high {
-            background-color: var(--high) !important;
-        }
-        .priority-med {
-            background-color: var(--med) !important;
-        }
-        .priority-low {
-            background-color: var(--low) !important;
+        .task span.task-text {
+            flex-grow: 1;
         }
 
+        .priority-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            margin-right: 8px;
+            display: inline-block;
+            cursor: pointer;
+            border: 2px solid #444;
+            box-sizing: border-box;
+            background-color: transparent; /* default base */
+        }
+
+        .task-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+        }
+
+
+        /* Override background color cleanly */
+        .priority-dot.gray { background-color: #ccc; }
+        .priority-dot.low  { background-color: var(--low); }
+        .priority-dot.med  { background-color: var(--med); }
+        .priority-dot.high { background-color: var(--high); }
+        .priority-dot::after {
+            content: 'Change Priority';
+            font-size: 0.6rem;
+            position: absolute;
+            top: -20px;
+            left: 0;
+            background: #333;
+            color: #fff;
+            padding: 2px 5px;
+            /*border-radius: 4px;*/
+            opacity: 0;
+            transition: opacity 0.3s;
+            white-space: nowrap;
+        }
+
+        .priority-dot:hover::after {
+            opacity: 1;
+        }
+
+
         .add-task-input {
+            cursor: text;
             width: 100%;
             margin-top: 0.75rem;
             padding: 0.75rem 1rem;
@@ -238,29 +281,30 @@
         if (event.key === "Enter") {
             const input = event.target
             const value = input.value.trim()
-            if (value) {
-                saveState()
-                const task = document.createElement("div")
-                task.className = "task"
-                task.innerHTML = `
+            if (!value) return
+
+            saveState()
+
+            const task = document.createElement("div")
+            task.className = "task"
+            task.setAttribute("draggable", "true")
+
+            task.innerHTML = `
+          <div class="task-content">
             <input type="checkbox" onchange="this.closest('.task').classList.toggle('completed')">
-            <span>${value}</span>
-            <span>
-              <span class="priority-dot"></span>
-              <button onclick="this.closest('.task').remove()">🗑️</button>
-            </span>
-          `
-                task.setAttribute("draggable", "true")
-                task.addEventListener("dragstart", dragStart)
+            <span class="task-text">${value}</span>
+            <div class="priority-dot gray" tabindex="0" onclick="cyclePriority(this)" onkeydown="handlePriorityKey(event, this)"></div>
+            <button onclick="this.closest('.task').remove()">🗑️</button>
+          </div>
+        `
 
-                const priority = prompt("Priority? (high, med, low)").toLowerCase()
-                if (priority === "high") task.classList.add("priority-high")
-                else if (priority === "med") task.classList.add("priority-med")
-                else if (priority === "low") task.classList.add("priority-low")
+            const column = document.getElementById(columnId)
+            column.querySelector('.task-list').appendChild(task)
 
-                document.getElementById(columnId).insertBefore(task, input)
-                input.value = ""
-            }
+
+            input.value = ""
+            attachEvents()
+            enableSorting()
         }
     }
 
@@ -287,24 +331,18 @@
         })
     }
 
-    function dragStart(e) {
-        e.dataTransfer.setData("text/plain", e.target.outerHTML)
-        e.target.classList.add("dragging")
+    function enableSorting() {
+        document.querySelectorAll('.task-list').forEach(list => {
+            new Sortable(list, {
+                group: 'shared',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: saveState
+            });
+        });
     }
 
-    document.addEventListener("dragover", e => e.preventDefault())
 
-    document.addEventListener("drop", e => {
-        const dragging = document.querySelector(".dragging")
-        if (dragging) dragging.remove()
-        const dropTarget = e.target.closest(".column")
-        if (dropTarget) {
-            saveState()
-            const html = e.dataTransfer.getData("text/plain")
-            dropTarget.insertAdjacentHTML("beforeend", html)
-            attachEvents()
-        }
-    })
 
     function attachEvents() {
         document.querySelectorAll(".task").forEach(task => {
@@ -316,6 +354,7 @@
                 btn.closest(".column").remove()
             })
         })
+        enableSorting()
     }
 
     function addBoard() {
@@ -326,15 +365,34 @@
         column.className = "column"
         column.id = newId
         column.innerHTML = `
-        <h2 contenteditable="true">New List <button>✕</button></h2>
-        <input class="add-task-input" placeholder="Add a task..." onkeypress="handleAddTask(event, '${newId}')">
-      `
+          <h2 contenteditable="true">New List <button>✕</button></h2>
+          <input class="add-task-input" placeholder="Add a task..." onkeypress="handleAddTask(event, '${newId}')">
+          <div class="task-list"></div>
+`
+
         board.appendChild(column)
         attachEvents()
     }
 
+    function cyclePriority(dot) {
+        const classes = ['gray', 'low', 'med', 'high']
+        let current = classes.findIndex(c => dot.classList.contains(c))
+        dot.classList.remove(classes[current])
+        let next = (current + 1) % classes.length
+        dot.classList.add(classes[next])
+    }
+
+
+    function handlePriorityKey(event, dot) {
+        if (event.key === 'Enter') {
+            cyclePriority(dot)
+        }
+    }
+
+
     addBoard()
     attachEvents()
+
 </script>
 </body>
 </html>
