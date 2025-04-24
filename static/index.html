@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List Board</title>
+    <style>
+        :root {
+            --bg-color-light: #ffeede;
+            --bg-color-dark: #1e1e1e;
+            --card-bg: #fff8f1;
+            --text-light: #000;
+            --text-dark: #fff;
+            --accent: #ff7b4c;
+            --high: #ff6b6b;
+            --med: #ffe066;
+            --low: #8ee4af;
+        }
+
+        body.light {
+            background-color: var(--bg-color-light);
+            color: var(--text-light);
+        }
+
+        body.dark {
+            background-color: var(--bg-color-dark);
+            color: var(--text-dark);
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        header {
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: var(--accent);
+        }
+
+        .top-right-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .top-right-buttons button {
+            padding: 0.5rem 0.75rem;
+            background: var(--accent);
+            border: none;
+            border-radius: 0.5rem;
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .board-container {
+            padding: 1rem;
+            height: calc(100vh - 150px);
+            overflow-y: auto;
+        }
+
+        .board {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+            gap: 2rem;
+        }
+
+        .column {
+            background-color: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            width: 250px;
+            min-height: 300px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .column h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .column h2 button {
+            background: none;
+            border: none;
+            color: red;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .task {
+            background-color: #f1f1f1;
+            border-radius: 0.4rem;
+            padding: 0.5rem 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .task.completed span:first-child {
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+
+        .task input[type="checkbox"] {
+            transform: scale(1.2);
+            margin-right: 0.5rem;
+        }
+
+        .task button {
+            background: none;
+            border: none;
+            color: red;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .priority-high {
+            background-color: var(--high) !important;
+        }
+        .priority-med {
+            background-color: var(--med) !important;
+        }
+        .priority-low {
+            background-color: var(--low) !important;
+        }
+
+        .add-task-input {
+            width: 100%;
+            margin-top: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        .add-board-btn {
+            font-size: 2rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1rem auto;
+        }
+
+        .action-buttons button {
+            padding: 0.5rem 1rem;
+            background-color: var(--accent);
+            border: none;
+            color: white;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="light">
+<header>
+    <h1 contenteditable="true">📝 To-Do List Board</h1>
+    <div class="top-right-buttons">
+        <button onclick="toggleTheme()">🌙/☀️</button>
+        <button onclick="undo()">Undo</button>
+        <button onclick="redo()">Redo</button>
+    </div>
+</header>
+
+<div class="action-buttons">
+    <button onclick="deleteCompleted()">Delete All Completed</button>
+    <button onclick="clearAll()">Clear All</button>
+    <button onclick="sortByPriority()">Sort by Priority</button>
+</div>
+
+<div class="board-container">
+    <div class="board" id="board"></div>
+    <button class="add-board-btn" onclick="addBoard()">+</button>
+</div>
+
+<script>
+    let history = []
+    let redoStack = []
+    let boardCount = 0
+
+    function saveState() {
+        const state = document.getElementById('board').innerHTML
+        history.push(state)
+        if (history.length > 100) history.shift()
+        redoStack = []
+    }
+
+    function undo() {
+        if (history.length > 0) {
+            redoStack.push(document.getElementById('board').innerHTML)
+            document.getElementById('board').innerHTML = history.pop()
+            attachEvents()
+        }
+    }
+
+    function redo() {
+        if (redoStack.length > 0) {
+            history.push(document.getElementById('board').innerHTML)
+            document.getElementById('board').innerHTML = redoStack.pop()
+            attachEvents()
+        }
+    }
+
+    function toggleTheme() {
+        document.body.classList.toggle("dark")
+        document.body.classList.toggle("light")
+    }
+
+    function handleAddTask(event, columnId) {
+        if (event.key === "Enter") {
+            const input = event.target
+            const value = input.value.trim()
+            if (value) {
+                saveState()
+                const task = document.createElement("div")
+                task.className = "task"
+                task.innerHTML = `
+            <input type="checkbox" onchange="this.closest('.task').classList.toggle('completed')">
+            <span>${value}</span>
+            <span>
+              <span class="priority-dot"></span>
+              <button onclick="this.closest('.task').remove()">🗑️</button>
+            </span>
+          `
+                task.setAttribute("draggable", "true")
+                task.addEventListener("dragstart", dragStart)
+
+                const priority = prompt("Priority? (high, med, low)").toLowerCase()
+                if (priority === "high") task.classList.add("priority-high")
+                else if (priority === "med") task.classList.add("priority-med")
+                else if (priority === "low") task.classList.add("priority-low")
+
+                document.getElementById(columnId).insertBefore(task, input)
+                input.value = ""
+            }
+        }
+    }
+
+    function deleteCompleted() {
+        document.querySelectorAll('.task.completed').forEach(task => task.remove())
+    }
+
+    function clearAll() {
+        saveState()
+        document.querySelectorAll('.column').forEach(col => {
+            col.querySelectorAll('.task').forEach(task => task.remove())
+        })
+    }
+
+    function sortByPriority() {
+        saveState()
+        document.querySelectorAll('.column').forEach(column => {
+            const tasks = Array.from(column.querySelectorAll('.task'))
+            tasks.sort((a, b) => {
+                const p = ['priority-high', 'priority-med', 'priority-low']
+                return p.findIndex(cls => a.classList.contains(cls)) - p.findIndex(cls => b.classList.contains(cls))
+            })
+            tasks.forEach(task => column.appendChild(task))
+        })
+    }
+
+    function dragStart(e) {
+        e.dataTransfer.setData("text/plain", e.target.outerHTML)
+        e.target.classList.add("dragging")
+    }
+
+    document.addEventListener("dragover", e => e.preventDefault())
+
+    document.addEventListener("drop", e => {
+        const dragging = document.querySelector(".dragging")
+        if (dragging) dragging.remove()
+        const dropTarget = e.target.closest(".column")
+        if (dropTarget) {
+            saveState()
+            const html = e.dataTransfer.getData("text/plain")
+            dropTarget.insertAdjacentHTML("beforeend", html)
+            attachEvents()
+        }
+    })
+
+    function attachEvents() {
+        document.querySelectorAll(".task").forEach(task => {
+            task.addEventListener("dragstart", dragStart)
+        })
+        document.querySelectorAll(".column h2 button").forEach(btn => {
+            btn.addEventListener("click", () => {
+                saveState()
+                btn.closest(".column").remove()
+            })
+        })
+    }
+
+    function addBoard() {
+        saveState()
+        const board = document.getElementById("board")
+        const newId = `column-${boardCount++}`
+        const column = document.createElement("div")
+        column.className = "column"
+        column.id = newId
+        column.innerHTML = `
+        <h2 contenteditable="true">New List <button>✕</button></h2>
+        <input class="add-task-input" placeholder="Add a task..." onkeypress="handleAddTask(event, '${newId}')">
+      `
+        board.appendChild(column)
+        attachEvents()
+    }
+
+    addBoard()
+    attachEvents()
+</script>
+</body>
+</html>
